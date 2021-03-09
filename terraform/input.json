@@ -1,0 +1,27 @@
+{
+    "Policies": {
+        "PasswordPolicy": {
+            "MinimumLength": 10,
+            "RequireUppercase": false,
+            "RequireLowercase": false,
+            "RequireNumbers": false,
+            "RequireSymbols": false,
+            "TemporaryPasswordValidityDays": 7
+        }
+    },
+    "LambdaConfig": {},
+    "AutoVerifiedAttributes": [
+        "email"
+    ],
+    "VerificationMessageTemplate": {
+        "DefaultEmailOption": "CONFIRM_WITH_CODE"
+    },
+    "MfaConfiguration": "OFF",
+    "EmailConfiguration": {
+        "EmailSendingAccount": "COGNITO_DEFAULT"
+    },
+    "UserPoolTags": {},
+    "AdminCreateUserConfig": {
+        "AllowAdminCreateUserOnly": false
+    }
+}

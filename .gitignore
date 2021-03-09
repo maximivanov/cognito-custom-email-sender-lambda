@@ -1,0 +1,9 @@
+.DS_Store
+node_modules
+stack-packaged.yaml
+
+.terraform
+*.tfstate
+*.tfstate.*
+
+lambda.zip

@@ -1,0 +1,144 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ProjectName:
+    Description: Project name
+    Type: String
+  CallingUserArn:
+    Description: Calling user ARN
+    Type: String
+  SendgridApiKey:
+    Description: Sendgrid API key
+    Type: String
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AutoVerifiedAttributes:
+        - email
+      LambdaConfig:
+        CustomEmailSender:
+          LambdaArn: !GetAtt LambdaTrigger.Arn
+          LambdaVersion: "V1_0"
+        KMSKeyID: !GetAtt KmsKey.Arn
+      UsernameConfiguration: 
+        CaseSensitive: false
+      UserPoolName: !Sub ${ProjectName}-user-pool
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy: 
+          MinimumLength: 10
+      Schema:
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub ${ProjectName}-user-pool-client
+      PreventUserExistenceErrors: ENABLED
+      UserPoolId: !Ref UserPool
+      SupportedIdentityProviders:
+        - COGNITO
+
+  KmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Enabled: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+          Action: 'kms:*'
+          Resource: '*'
+        - Effect: Allow
+          Principal:
+            AWS: !Ref CallingUserArn
+          Action:
+            - "kms:Create*"
+            - "kms:Describe*"
+            - "kms:Enable*"
+            - "kms:List*"
+            - "kms:Put*"
+            - "kms:Update*"
+            - "kms:Revoke*"
+            - "kms:Disable*"
+            - "kms:Get*"
+            - "kms:Delete*"
+            - "kms:TagResource"
+            - "kms:UntagResource"
+            - "kms:ScheduleKeyDeletion"
+            - "kms:CancelKeyDeletion"
+          Resource: '*'
+
+  LambdaTriggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "sts:AssumeRole"
+            Principal:
+              Service: "lambda.amazonaws.com"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  LambdaTriggerRoleKmsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "kms:Decrypt"
+            Resource: !GetAtt KmsKey.Arn
+      PolicyName: "LambdaKmsPolicy"
+      Roles:
+        - !Ref LambdaTriggerRole
+
+  LambdaTrigger:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: "../lambda"
+      Environment:
+        Variables:
+          KEY_ID: !GetAtt KmsKey.Arn
+          SENDGRID_API_KEY: !Ref SendgridApiKey
+      FunctionName: !Sub ${ProjectName}-lambda-custom-email-sender-trigger
+      PackageType: Zip
+      Role: !GetAtt LambdaTriggerRole.Arn
+      Runtime: nodejs12.x
+      Handler: index.handler
+
+  LambdaTriggerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      Principal: cognito-idp.amazonaws.com
+      FunctionName: !GetAtt LambdaTrigger.Arn
+      SourceArn: !GetAtt UserPool.Arn
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+    Description: User pool ID
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+    Description: User pool client ID
